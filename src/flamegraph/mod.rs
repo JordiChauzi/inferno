@@ -205,7 +205,8 @@ where
 
     // structs to reuse accross loops to avoid allocations
     let mut event_start = Event::Start({ BytesStart::owned_name("g") });
-    let mut event_start_a = Event::Start({BytesStart::owned_name("a")});
+    let mut event_start_a = Event::Start({ BytesStart::owned_name("a") });
+    let mut event_empty_filled_rect = Event::Empty(BytesStart::owned_name("rect"));
 
     // draw frames
     let mut samples_txt_buffer = num_format::Buffer::default();
@@ -281,7 +282,6 @@ where
         svg.write_event(Event::End(BytesEnd::borrowed(b"title")))?;
 
         if let Some(href) = frame_attributes.href {
-
             if let Event::Start(ref mut a) = event_start_a {
                 // clear the BytesStart
                 a.clear_attributes();
@@ -299,14 +299,41 @@ where
         }
 
         if frame.location.function == "--" {
-            filled_rectangle(&mut svg, &mut buffer, x1, x2, y1, y2, color::VDGREY)?;
+            filled_rectangle(
+                &mut svg,
+                &mut buffer,
+                x1,
+                x2,
+                y1,
+                y2,
+                color::VDGREY,
+                &mut event_empty_filled_rect,
+            )?;
         } else if frame.location.function == "-" {
-            filled_rectangle(&mut svg, &mut buffer, x1, x2, y1, y2, color::DGREY)?;
+            filled_rectangle(
+                &mut svg,
+                &mut buffer,
+                x1,
+                x2,
+                y1,
+                y2,
+                color::DGREY,
+                &mut event_empty_filled_rect,
+            )?;
         } else if let Some(ref mut palette_map) = palette_map {
             let color = palette_map.find_color_for(&frame.location.function, |name| {
                 color::color(opt.colors, opt.hash, name, &mut thread_rng)
             });
-            filled_rectangle(&mut svg, &mut buffer, x1, x2, y1, y2, color)?;
+            filled_rectangle(
+                &mut svg,
+                &mut buffer,
+                x1,
+                x2,
+                y1,
+                y2,
+                color,
+                &mut event_empty_filled_rect,
+            )?;
         } else {
             let color = color::color(
                 opt.colors,
@@ -314,7 +341,16 @@ where
                 frame.location.function,
                 &mut thread_rng,
             );
-            filled_rectangle(&mut svg, &mut buffer, x1, x2, y1, y2, color)?;
+            filled_rectangle(
+                &mut svg,
+                &mut buffer,
+                x1,
+                x2,
+                y1,
+                y2,
+                color,
+                &mut event_empty_filled_rect,
+            )?;
         };
 
         let fitchars = ((x2 - x1) as f64 / (FONTSIZE as f64 * FONTWIDTH)).trunc() as usize;
@@ -424,6 +460,7 @@ fn filled_rectangle<W: Write>(
     y1: usize,
     y2: usize,
     color: (u8, u8, u8),
+    svg_event_empty: &mut Event,
 ) -> quick_xml::Result<usize> {
     let x = write!(buffer, "{}", x1);
     let y = write!(buffer, "{}", y1);
@@ -431,15 +468,18 @@ fn filled_rectangle<W: Write>(
     let height = write!(buffer, "{}", y2 - y1);
     let color = write!(buffer, "rgb({},{},{})", color.0, color.1, color.2);
 
-    svg.write_event(Event::Empty(
-        BytesStart::borrowed_name(b"rect").with_attributes(args!(
-                "x" => &buffer[x],
-                "y" => &buffer[y],
-                "width" => &buffer[width],
-                "height" => &buffer[height],
-                "fill" => &buffer[color]
-        )),
-    ))
+    if let Event::Empty(bytes_start) = svg_event_empty {
+        // clear the state
+        bytes_start.clear_attributes();
+        bytes_start.extend_attributes(args!(
+            "x" => &buffer[x],
+            "y" => &buffer[y],
+            "width" => &buffer[width],
+            "height" => &buffer[height],
+            "fill" => &buffer[color]
+        ));
+    }
+    svg.write_event(&svg_event_empty)
 }
 
 impl Default for Direction {
