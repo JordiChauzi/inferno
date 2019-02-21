@@ -298,60 +298,33 @@ where
             svg.write_event(&event_start_a)?;
         }
 
-        if frame.location.function == "--" {
-            filled_rectangle(
-                &mut svg,
-                &mut buffer,
-                x1,
-                x2,
-                y1,
-                y2,
-                color::VDGREY,
-                &mut event_empty_filled_rect,
-            )?;
+        // select the color of the rectangle
+        let color = if frame.location.function == "--" {
+            color::VDGREY
         } else if frame.location.function == "-" {
-            filled_rectangle(
-                &mut svg,
-                &mut buffer,
-                x1,
-                x2,
-                y1,
-                y2,
-                color::DGREY,
-                &mut event_empty_filled_rect,
-            )?;
+            color::DGREY
         } else if let Some(ref mut palette_map) = palette_map {
-            let color = palette_map.find_color_for(&frame.location.function, |name| {
+            palette_map.find_color_for(&frame.location.function, |name| {
                 color::color(opt.colors, opt.hash, name, &mut thread_rng)
-            });
-            filled_rectangle(
-                &mut svg,
-                &mut buffer,
-                x1,
-                x2,
-                y1,
-                y2,
-                color,
-                &mut event_empty_filled_rect,
-            )?;
+            })
         } else {
-            let color = color::color(
+            color::color(
                 opt.colors,
                 opt.hash,
                 frame.location.function,
                 &mut thread_rng,
-            );
-            filled_rectangle(
-                &mut svg,
-                &mut buffer,
-                x1,
-                x2,
-                y1,
-                y2,
-                color,
-                &mut event_empty_filled_rect,
-            )?;
+            )
         };
+        filled_rectangle(
+            &mut svg,
+            &mut buffer,
+            x1,
+            x2,
+            y1,
+            y2,
+            color,
+            &mut event_empty_filled_rect,
+        )?;
 
         let fitchars = ((x2 - x1) as f64 / (FONTSIZE as f64 * FONTWIDTH)).trunc() as usize;
         let text: svg::TextArgument = if fitchars >= 3 {
