@@ -203,8 +203,9 @@ where
     // frames loop.
     let mut thread_rng = rand::thread_rng();
 
-    // struct to reuse accross loops to avoid allocations
+    // structs to reuse accross loops to avoid allocations
     let mut event_start = Event::Start({ BytesStart::owned_name("g") });
+    let mut event_start_a = Event::Start({BytesStart::owned_name("a")});
 
     // draw frames
     let mut samples_txt_buffer = num_format::Buffer::default();
@@ -280,16 +281,21 @@ where
         svg.write_event(Event::End(BytesEnd::borrowed(b"title")))?;
 
         if let Some(href) = frame_attributes.href {
-            svg.write_event(Event::Start({
-                let mut a = BytesStart::borrowed_name(b"a").with_attributes(args!(
+
+            if let Event::Start(ref mut a) = event_start_a {
+                // clear the BytesStart
+                a.clear_attributes();
+
+                a.extend_attributes(args!(
                     "xlink:href" => href,
                     "target" => frame_attributes.target
                 ));
                 if let Some(extra) = frame_attributes.a_extra {
                     a.extend_attributes(extra.iter().map(|(k, v)| (k.as_str(), v.as_str())));
                 }
-                a
-            }))?;
+            }
+
+            svg.write_event(&event_start_a)?;
         }
 
         if frame.location.function == "--" {
