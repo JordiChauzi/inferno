@@ -125,6 +125,18 @@ fn override_or_add_attributes<'a>(
     }
 }
 
+struct Rectangle {
+    x1 : usize,
+    y1: usize,
+    x2: usize,
+    y2: usize
+}
+impl Rectangle {
+    fn width(&self) -> usize {
+        self.x2 - self.x1
+    }
+}
+
 pub fn from_sorted_lines<'a, I, W>(opt: Options, lines: I, writer: W) -> quick_xml::Result<()>
 where
     I: IntoIterator<Item = &'a str>,
@@ -204,9 +216,9 @@ where
     let mut thread_rng = rand::thread_rng();
 
     // structs to reuse accross loops to avoid allocations
-    let mut event_start = Event::Start({ BytesStart::owned_name("g") });
-    let mut event_start_a = Event::Start({ BytesStart::owned_name("a") });
-    let mut event_empty_filled_rect = Event::Empty(BytesStart::owned_name("rect"));
+    let mut cache_g = Event::Start({ BytesStart::owned_name("g") });
+    let mut cache_a = Event::Start({ BytesStart::owned_name("a") });
+    let mut cache_rect = Event::Empty(BytesStart::owned_name("rect"));
 
     // draw frames
     let mut samples_txt_buffer = num_format::Buffer::default();
@@ -225,6 +237,7 @@ where
                 (y1, y2)
             }
         };
+        let rect = Rectangle{x1, y1, x2, y2};
 
         let samples = frame.end_time - frame.start_time;
 
@@ -253,7 +266,7 @@ where
         let frame_attributes = override_or_add_attributes(&buffer[info], frame_attributes);
         let href_is_some = frame_attributes.href.is_some();
 
-        if let Event::Start(ref mut g) = event_start {
+        if let Event::Start(ref mut g) = cache_g {
             // clear the BytesStart
             g.clear_attributes();
 
@@ -273,7 +286,7 @@ where
             }
         }
 
-        svg.write_event(&event_start)?;
+        svg.write_event(&cache_g)?;
 
         svg.write_event(Event::Start(BytesStart::borrowed_name(b"title")))?;
         svg.write_event(Event::Text(BytesText::from_plain_str(
@@ -282,7 +295,7 @@ where
         svg.write_event(Event::End(BytesEnd::borrowed(b"title")))?;
 
         if let Some(href) = frame_attributes.href {
-            if let Event::Start(ref mut a) = event_start_a {
+            if let Event::Start(ref mut a) = cache_a {
                 // clear the BytesStart
                 a.clear_attributes();
 
@@ -295,7 +308,7 @@ where
                 }
             }
 
-            svg.write_event(&event_start_a)?;
+            svg.write_event(&cache_a)?;
         }
 
         // select the color of the rectangle
@@ -318,15 +331,12 @@ where
         filled_rectangle(
             &mut svg,
             &mut buffer,
-            x1,
-            x2,
-            y1,
-            y2,
+            &rect,
             color,
-            &mut event_empty_filled_rect,
+            &mut cache_rect,
         )?;
 
-        let fitchars = ((x2 - x1) as f64 / (FONTSIZE as f64 * FONTWIDTH)).trunc() as usize;
+        let fitchars = (rect.width() as f64 / (FONTSIZE as f64 * FONTWIDTH)).trunc() as usize;
         let text: svg::TextArgument = if fitchars >= 3 {
             // room for one char plus two dots
             let f = deannotate(&frame.location.function);
@@ -350,14 +360,15 @@ where
             "".into()
         };
 
+        // write the text
         svg::write_str(
             &mut svg,
             &mut buffer,
             svg::TextItem {
                 color: "rgb(0, 0, 0)",
                 size: FONTSIZE,
-                x: x1 as f64 + 3.0,
-                y: 3.0 + (y1 + y2) as f64 / 2.0,
+                x: rect.x1 as f64 + 3.0,
+                y: 3.0 + (rect.y1 + rect.y2) as f64 / 2.0,
                 text,
                 location: None,
                 extra: None,
@@ -428,17 +439,14 @@ fn deannotate(f: &str) -> &str {
 fn filled_rectangle<W: Write>(
     svg: &mut Writer<W>,
     buffer: &mut StrStack,
-    x1: usize,
-    x2: usize,
-    y1: usize,
-    y2: usize,
+    rect: &Rectangle,
     color: (u8, u8, u8),
     svg_event_empty: &mut Event,
 ) -> quick_xml::Result<usize> {
-    let x = write!(buffer, "{}", x1);
-    let y = write!(buffer, "{}", y1);
-    let width = write!(buffer, "{}", x2 - x1);
-    let height = write!(buffer, "{}", y2 - y1);
+    let x = write!(buffer, "{}", rect.x1);
+    let y = write!(buffer, "{}", rect.y1);
+    let width = write!(buffer, "{}", rect.x2 - rect.x1);
+    let height = write!(buffer, "{}", rect.y2 - rect.y1);
     let color = write!(buffer, "rgb({},{},{})", color.0, color.1, color.2);
 
     if let Event::Empty(bytes_start) = svg_event_empty {
