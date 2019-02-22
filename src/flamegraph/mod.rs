@@ -126,10 +126,10 @@ fn override_or_add_attributes<'a>(
 }
 
 struct Rectangle {
-    x1 : usize,
+    x1: usize,
     y1: usize,
     x2: usize,
-    y2: usize
+    y2: usize,
 }
 impl Rectangle {
     fn width(&self) -> usize {
@@ -237,7 +237,7 @@ where
                 (y1, y2)
             }
         };
-        let rect = Rectangle{x1, y1, x2, y2};
+        let rect = Rectangle { x1, y1, x2, y2 };
 
         let samples = frame.end_time - frame.start_time;
 
@@ -284,6 +284,8 @@ where
             if let Some(extra) = frame_attributes.g_extra {
                 g.extend_attributes(extra.iter().map(|(k, v)| (k.as_str(), v.as_str())));
             }
+        } else {
+            unreachable!("cache wrapper was of wrong type: {:?}", cache_g);
         }
 
         svg.write_event(&cache_g)?;
@@ -306,6 +308,8 @@ where
                 if let Some(extra) = frame_attributes.a_extra {
                     a.extend_attributes(extra.iter().map(|(k, v)| (k.as_str(), v.as_str())));
                 }
+            } else {
+                unreachable!("cache wrapper was of wrong type: {:?}", cache_a);
             }
 
             svg.write_event(&cache_a)?;
@@ -328,13 +332,7 @@ where
                 &mut thread_rng,
             )
         };
-        filled_rectangle(
-            &mut svg,
-            &mut buffer,
-            &rect,
-            color,
-            &mut cache_rect,
-        )?;
+        filled_rectangle(&mut svg, &mut buffer, &rect, color, &mut cache_rect)?;
 
         let fitchars = (rect.width() as f64 / (FONTSIZE as f64 * FONTWIDTH)).trunc() as usize;
         let text: svg::TextArgument = if fitchars >= 3 {
@@ -441,7 +439,7 @@ fn filled_rectangle<W: Write>(
     buffer: &mut StrStack,
     rect: &Rectangle,
     color: (u8, u8, u8),
-    svg_event_empty: &mut Event,
+    cache_rect: &mut Event,
 ) -> quick_xml::Result<usize> {
     let x = write!(buffer, "{}", rect.x1);
     let y = write!(buffer, "{}", rect.y1);
@@ -449,7 +447,7 @@ fn filled_rectangle<W: Write>(
     let height = write!(buffer, "{}", rect.y2 - rect.y1);
     let color = write!(buffer, "rgb({},{},{})", color.0, color.1, color.2);
 
-    if let Event::Empty(bytes_start) = svg_event_empty {
+    if let Event::Empty(bytes_start) = cache_rect {
         // clear the state
         bytes_start.clear_attributes();
         bytes_start.extend_attributes(args!(
@@ -459,8 +457,10 @@ fn filled_rectangle<W: Write>(
             "height" => &buffer[height],
             "fill" => &buffer[color]
         ));
+    } else {
+        unreachable!("cache wrapper was of wrong type: {:?}", cache_rect);
     }
-    svg.write_event(&svg_event_empty)
+    svg.write_event(&cache_rect)
 }
 
 impl Default for Direction {
